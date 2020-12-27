@@ -1,0 +1,77 @@
+import pytesseract
+from PIL import Image
+from zipfile import ZipFile 
+import datetime 
+import cv2 as cv
+from PIL import ImageDraw, ImageFont
+import numpy as np
+import math
+
+face_cascade = cv.CascadeClassifier('readonly/haarcascade_frontalface_default.xml')
+
+
+# return all faces in the img
+def get_faces(img):
+    face_images = []
+    cv_image = np.array(img) 
+    cv_img = cv.cvtColor(cv_image, cv.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(cv_img,1.3,5)
+    for x,y,w,h in faces:
+        cropped_face = img.crop((x,y,x+w,y+h))
+        cropped_face.thumbnail((100,100))
+        face_images.append(cropped_face)
+    return face_images
+
+
+# return a contact_sheet merging the cropped_faces
+def make_sheet(cropped_faces):
+    h = math.ceil(len(cropped_faces)/5)
+    contact_sheet = Image.new('RGB',(500,h*100))
+    x, y = 0,0
+    for face in cropped_faces:
+        contact_sheet.paste(face,(x,y))
+        x, y = (0,y+100) if x == 400 else (x+100,y)
+    return contact_sheet
+
+
+# main code start here
+image_info = []
+file_name = "readonly/images.zip"
+with ZipFile(file_name, 'r') as zip: 
+    zip.extractall()
+    for info in zip.infolist():
+        info_dict = {}
+        filename = info.filename
+        info_dict['name'] = filename
+        img = Image.open(filename).convert('RGB')
+        
+        # store text
+        info_dict['text'] = pytesseract.image_to_string(img)
+        
+        cropped_faces = get_faces(img)
+        # store face_num
+        info_dict['face_num'] = len(cropped_faces)
+        
+        # store contact_sheet
+        if len(cropped_faces)>0:
+            info_dict['contact_sheet'] = make_sheet(cropped_faces)
+        else:
+            info_dict['message'] = "But there were no faces in that file"
+        image_info.append(info_dict)
+
+
+# return the contact sheet based on the key_string searched
+def Search(key_string):
+    for info in image_info:
+        if key_string in info['text']:
+            print('Results found in file {}'.format(info['name']))
+            if info['face_num']>0:
+                display(info['contact_sheet'])
+            else:
+                print(info['message'])
+
+
+# test
+Search("Christopher")
+
+Search("Mark")
